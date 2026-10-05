@@ -26,16 +26,24 @@ jobs:
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-opencv
 
-      - name: Smoke test (OpenCV をリンクしてビルドできるか)
+      - name: Diagnose OpenCV files
+        shell: msys2 {0}
+        run: |
+          pacman -Ql mingw-w64-ucrt-x86_64-opencv | grep -E '\.pc$|OpenCVConfig\.cmake$' || true
+          ls /ucrt64/lib/pkgconfig | grep -i opencv || true
+
+      - name: Smoke test (CMake で OpenCV をリンクできるか)
         shell: msys2 {0}
         run: |
           g++ --version
           cmake --version
           ninja --version
-          pkg-config --modversion opencv4
+          mkdir smoke && cd smoke
           printf '#include <opencv2/opencv.hpp>\nint main(){cv::Mat m(2,2,CV_8UC1);return m.empty();}\n' > t.cpp
-          g++ -std=c++20 t.cpp -o t.exe $(pkg-config --cflags --libs opencv4)
-          ./t.exe
+          printf 'cmake_minimum_required(VERSION 3.20)\nproject(t CXX)\nset(CMAKE_CXX_STANDARD 20)\nfind_package(OpenCV REQUIRED)\nmessage(STATUS "OpenCV ${OpenCV_VERSION}")\nadd_executable(t t.cpp)\ntarget_link_libraries(t PRIVATE ${OpenCV_LIBS})\n' > CMakeLists.txt
+          cmake -G Ninja -S . -B build
+          cmake --build build
+          ./build/t.exe
 
       - name: Trim and zip
         shell: msys2 {0}
