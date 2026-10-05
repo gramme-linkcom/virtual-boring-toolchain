@@ -1,0 +1,52 @@
+name: build-toolchain
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (例: toolchain-2026-10-05)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-opencv
+
+      - name: Smoke test (OpenCV をリンクしてビルドできるか)
+        shell: msys2 {0}
+        run: |
+          g++ --version
+          cmake --version
+          ninja --version
+          pkg-config --modversion opencv4
+          printf '#include <opencv2/opencv.hpp>\nint main(){cv::Mat m(2,2,CV_8UC1);return m.empty();}\n' > t.cpp
+          g++ -std=c++20 t.cpp -o t.exe $(pkg-config --cflags --libs opencv4)
+          ./t.exe
+
+      - name: Trim and zip
+        shell: msys2 {0}
+        run: |
+          root="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')"
+          rm -rf "$root/ucrt64/share/doc" "$root/ucrt64/share/man" "$root/ucrt64/share/info"
+          cd "$root"
+          7z a -tzip -mx=5 "$GITHUB_WORKSPACE/toolchain-ucrt64.zip" ucrt64
+          ls -lh "$GITHUB_WORKSPACE/toolchain-ucrt64.zip"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          files: toolchain-ucrt64.zip
