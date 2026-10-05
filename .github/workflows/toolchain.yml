@@ -45,14 +45,18 @@ jobs:
           cmake --build build
           ./build/t.exe
 
-      - name: Trim and zip
+      - name: Trim
         shell: msys2 {0}
         run: |
           root="$(cygpath -u '${{ steps.msys2.outputs.msys2-location }}')"
           rm -rf "$root/ucrt64/share/doc" "$root/ucrt64/share/man" "$root/ucrt64/share/info"
-          cd "$root"
-          7z a -tzip -mx=5 "$GITHUB_WORKSPACE/toolchain-ucrt64.zip" ucrt64
-          ls -lh "$GITHUB_WORKSPACE/toolchain-ucrt64.zip"
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Set-Location "${{ steps.msys2.outputs.msys2-location }}"
+          7z a -tzip -mx=5 "$env:GITHUB_WORKSPACE\toolchain-ucrt64.zip" ucrt64
+          Get-Item "$env:GITHUB_WORKSPACE\toolchain-ucrt64.zip" | Select-Object Name, @{n='SizeMB';e={[math]::Round($_.Length/1MB)}}
 
       - uses: softprops/action-gh-release@v2
         with:
